@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ref, onValue, push, serverTimestamp } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
@@ -21,7 +21,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadMachines();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedMachine) return;
