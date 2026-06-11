@@ -6,7 +6,7 @@
 const char* WIFI_SSID = "Josepro";
 const char* WIFI_PASSWORD = "12345678";
 const char* FIREBASE_HOST = "lumajiramaquinarias-9f2d4-default-rtdb.firebaseio.com";
-const char* FIREBASE_API_KEY = "AIzaSyAcy7oZip5edaB1gnX6WrB4_d65BbXpvi4";
+const char* FIREBASE_API_KEY = ;
 const char* MACHINE_ID = "t6WfDV4dLfcg91PkdmXwTblkbLl1";
 const int SCT_PIN = 34;
 const float CALIBRATION = 29.0;
