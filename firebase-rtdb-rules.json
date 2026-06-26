@@ -1,11 +1,24 @@
 {
   "rules": {
-    "sensors": {
+    "machines": {
       "$machineId": {
         ".read": "auth != null",
-        ".write": true,
-        "sct013": {
-          ".indexOn": ["timestamp"]
+        ".write": "auth != null",
+        "sensors": {
+          "sct013": {
+            ".indexOn": ["timestamp"]
+          },
+          "thermistor": {
+            ".indexOn": ["timestamp"]
+          }
+        },
+        "commands": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "status": {
+          ".read": "auth != null",
+          ".write": "auth != null"
         }
       }
     }

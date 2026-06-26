@@ -1,6 +1,6 @@
-# Lumajira Maquinarias — Sistema de Monitoreo Industrial
+# Lumajira Maquinarias — Sistema de Monitoreo y Control Industrial
 
-Sistema para monitorear máquinas de inyección en tiempo real usando ESP32 + Firebase + React.
+Sistema para monitorear y controlar máquinas de inyección en tiempo real usando ESP32 + Firebase + React.
 
 ## 📁 Estructura del proyecto
 
@@ -9,14 +9,16 @@ lumajira/
 ├── src/                    ← App React (web)
 │   ├── firebase/config.js  ← Configuración Firebase
 │   ├── hooks/useAuth.js    ← Auth con Firebase
+│   ├── components/
+│   │   └── ControlPanel.jsx ← Panel de control (temperatura, motores, emergencia)
 │   ├── pages/
 │   │   ├── SplashPage.jsx  ← Pantalla inicial con foto del equipo
 │   │   ├── AuthPage.jsx    ← Login y registro
-│   │   └── Dashboard.jsx   ← Monitoreo en tiempo real
-│   └── utils/alerts.js     ← Lógica de mantenimiento predictivo
+│   │   └── Dashboard.jsx   ← Monitoreo en tiempo real + control
+│   └── utils/alerts.js     ← Lógica de alertas y mantenimiento predictivo
 ├── esp32/
 │   ├── platformio.ini      ← Configuración PlatformIO
-│   └── src/main.cpp        ← Firmware ESP32
+│   └── src/main.cpp        ← Firmware ESP32 (sensado + control + Firebase)
 ├── .env.example            ← Variables de entorno (copiar a .env)
 ├── firebase-rtdb-rules.json← Reglas Firebase Realtime DB
 ├── firestore.rules         ← Reglas Firestore
@@ -68,8 +70,12 @@ npm run build
 |---|---|
 | ESP32 DevKit | Cualquier versión |
 | SCT-013-030 | Sensor de corriente 30A |
+| NTC 10K | Termistor para temperatura |
+| TB6600 | Driver para motores paso a paso |
+| NEMA 23 x2 | Motores para inyección y rotación |
 | Resistor burden | 33Ω (para SCT-013-030) |
 | Capacitor | 10µF electrolítico |
+| Relay/PWM | Para control de calentador |
 
 ### Conexión SCT-013:
 ```
@@ -82,6 +88,46 @@ Circuito de acondicionamiento:
            │
            └── Capacitor 10µF (+) ── 3.3V
                                 (−) ── GND
+```
+
+### Conexión NTC 10K:
+```
+NTC 10K Thermistor:
+  Un pin → PIN 36 (ADC) del ESP32
+  Otro pin → GND del ESP32
+  Resistor 10K entre PIN 36 y 3.3V (divisor de voltaje)
+```
+
+### Conexión TB6600 (Motores):
+```
+TB6600 Driver 1 (Inyección):
+  STEP → PIN 12 del ESP32
+  DIR → PIN 13 del ESP32
+  GND → GND del ESP32
+  VCC → Fuente de poder motor
+
+TB6600 Driver 2 (Rotación):
+  STEP → PIN 14 del ESP32
+  DIR → PIN 15 del ESP32
+  GND → GND del ESP32
+  VCC → Fuente de poder motor
+```
+
+### Conexión Calentador:
+```
+Relay/PWM Module:
+  Signal → PIN 26 del ESP32
+  VCC → 5V del ESP32
+  GND → GND del ESP32
+  COM → Fuente de poder resistencias
+  NO → Resistencias de banda
+```
+
+### Paro de Emergencia:
+```
+Botón de Emergencia:
+  Un pin → PIN 27 del ESP32 (INPUT_PULLUP)
+  Otro pin → GND del ESP32
 ```
 
 ### Configurar firmware:
@@ -142,11 +188,47 @@ vercel
 | Crítico | > 10.0 A | Detener máquina |
 | Sin señal | < 0.3 A | Verificar conexiones |
 
+## 🌡️ Umbrales de alerta — Temperatura NTC-10K
+
+| Nivel | Temperatura | Acción |
+|---|---|---|
+| Crítico bajo | < 80°C | Verificar calentador |
+| Advertencia bajo | < 100°C | Esperar calentamiento |
+| Normal | 100 – 240°C | Sin acción |
+| Advertencia alto | > 240°C | Monitorear de cerca |
+| Crítico alto | > 260°C | Detener máquina |
+
+## 🎮 Funciones de Control (desde teléfono)
+
+| Función | Descripción |
+|---|---|
+| **Control de Temperatura** | Establecer temperatura objetivo (100-260°C) |
+| **Control de Inyección** | Ajustar velocidad y activar inyección |
+| **Control de Rotación** | Ajustar velocidad y activar rotación |
+| **Paro de Emergencia** | Detener toda operación inmediatamente |
+| **Parada Normal** | Detener calentamiento y motores |
+| **Estado en Tiempo Real** | Ver estado de la máquina actualizado |
+
+## 🔄 Secuencia de Inyección
+
+1. Establecer temperatura objetivo (ej: 220°C para PP)
+2. ESP32 calienta el barril usando PID
+3. Cuando se alcanza la temperatura → Presionar "Inyectar"
+4. Motor 1 rota (inyección) → Empuja plástico al molde
+5. Motor 2 rota (husillo) → Plastifica siguiente shots
+6. Temporizador de enfriamiento
+7. Molde se abre (si aplica)
+8. Pieza se expulsa
+
 ---
 
 ## 🔮 Roadmap futuro
 
-- [ ] Sensor de temperatura (DS18B20) en cilindros
+- [x] Sensor de temperatura (NTC 10K) en barril
+- [x] Control de temperatura PID
+- [x] Control de motores (inyección + rotación)
+- [x] Paro de emergencia
+- [x] Control desde teléfono
 - [ ] Sensor de presión hidráulica (4-20mA)
 - [ ] Contador de ciclos (encoder o reed switch)
 - [ ] Notificaciones WhatsApp vía Twilio

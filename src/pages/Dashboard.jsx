@@ -5,19 +5,22 @@ import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
 import { rtdb, db } from '../firebase/config';
-import { analyzeCurrentReading, predictiveMaintenance } from '../utils/alerts';
+import { analyzeCurrentReading, analyzeTemperatureReading, predictiveMaintenance } from '../utils/alerts';
 import { format } from 'date-fns';
+import ControlPanel from '../components/ControlPanel';
 
 export default function Dashboard() {
   const { user, userData, logout } = useAuth();
   const navigate = useNavigate();
   const [readings, setReadings] = useState([]);
+  const [tempReadings, setTempReadings] = useState([]);
   const [machines, setMachines] = useState([]);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [showAddMachine, setShowAddMachine] = useState(false);
   const [newMachineName, setNewMachineName] = useState('');
   const [alerts, setAlerts] = useState([]);
   const [currentStatus, setCurrentStatus] = useState(null);
+  const [tempStatus, setTempStatus] = useState(null);
 
   useEffect(() => {
     loadMachines();
@@ -25,8 +28,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!selectedMachine || !user) return;
-    const sensorRef = ref(rtdb, `sensors/${user.uid}/sct013`);
-    const unsub = onValue(sensorRef, (snap) => {
+    
+    // Listen to current sensor
+    const sensorRef = ref(rtdb, `machines/${user.uid}/sensors/sct013`);
+    const unsubCurrent = onValue(sensorRef, (snap) => {
       const data = snap.val();
       if (!data) return;
       const list = Object.entries(data)
@@ -49,7 +54,36 @@ export default function Dashboard() {
         setAlerts(allAlerts);
       }
     });
-    return () => unsub();
+
+    // Listen to temperature sensor
+    const tempRef = ref(rtdb, `machines/${user.uid}/sensors/thermistor`);
+    const unsubTemp = onValue(tempRef, (snap) => {
+      const data = snap.val();
+      if (!data) return;
+      const list = Object.entries(data)
+        .map(([k, v]) => ({ id: k, ...v }))
+        .filter((r) => typeof r.timestamp === 'number' && r.timestamp > 0)
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-60);
+      if (list.length === 0) return;
+      setTempReadings(list.map((r) => ({
+        time: format(new Date(r.timestamp), 'HH:mm:ss'),
+        value: parseFloat(r.temperature_c?.toFixed(1) || 0),
+      })));
+      const latest = list[list.length - 1];
+      if (latest) {
+        const status = analyzeTemperatureReading(latest.temperature_c);
+        setTempStatus(status);
+        if (status.level !== 'normal') {
+          setAlerts((prev) => [...prev, status]);
+        }
+      }
+    });
+
+    return () => {
+      unsubCurrent();
+      unsubTemp();
+    };
   }, [selectedMachine, user]);
 
   async function loadMachines() {
@@ -218,16 +252,16 @@ export default function Dashboard() {
                 status={currentStatus?.level}
               />
               <MetricCard
+                label="Temperatura"
+                value={tempReadings.length > 0 ? `${tempReadings[tempReadings.length - 1].value}°C` : '— °C'}
+                sub="Termistor NTC-10K"
+                status={tempStatus?.level}
+              />
+              <MetricCard
                 label="Estado"
                 value={currentStatus ? (currentStatus.level === 'normal' ? 'NORMAL' : currentStatus.level === 'warning' ? 'ADVERTENCIA' : 'CRÍTICO') : '—'}
                 sub="Resistencias de banda"
                 status={currentStatus?.level}
-              />
-              <MetricCard
-                label="Lecturas"
-                value={readings.length}
-                sub="Últimos 60 puntos"
-                status="normal"
               />
               <MetricCard
                 label="Alertas activas"
@@ -264,6 +298,9 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+
+            {/* Control Panel */}
+            <ControlPanel machineId={user?.uid} />
 
             <div style={{
               background: '#0a1628',
@@ -304,6 +341,46 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Temperature Chart */}
+            <div style={{
+              background: '#0a1628',
+              border: '1px solid #1d4e8f',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              marginBottom: '1.5rem',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h2 style={{ color: '#fff', margin: 0, fontSize: '1rem', fontWeight: '600' }}>
+                  🌡️ Temperatura en tiempo real — NTC-10K
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: '#5a8fc4' }}>Termistor · {selectedMachine.name}</span>
+              </div>
+              {tempReadings.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={tempReadings} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1d4e8f44" />
+                    <XAxis dataKey="time" tick={{ fill: '#5a8fc4', fontSize: 11 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: '#5a8fc4', fontSize: 11 }} unit="°C" domain={[0, 300]} />
+                    <Tooltip
+                      contentStyle={{ background: '#0a1628', border: '1px solid #1d4e8f', borderRadius: '8px', color: '#e8eef8' }}
+                      formatter={(v) => [`${v}°C`, 'Temperatura']}
+                    />
+                    <ReferenceLine y={240} stroke="#ba7517" strokeDasharray="4 4" label={{ value: 'Advertencia 240°C', fill: '#ba7517', fontSize: 11 }} />
+                    <ReferenceLine y={260} stroke="#e24b4a" strokeDasharray="4 4" label={{ value: 'Crítico 260°C', fill: '#e24b4a', fontSize: 11 }} />
+                    <Line type="monotone" dataKey="value" stroke="#ef9f27" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: '#ef9f27' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5a8fc4' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🌡️</div>
+                    <p>Esperando datos de temperatura del ESP32...</p>
+                    <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>Asegúrate que el termistor esté conectado.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div style={{
               background: '#0a1628',
               border: '1px solid #1d4e8f',
@@ -315,6 +392,7 @@ export default function Dashboard() {
               </h2>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 <SensorCard type="SCT-013" label="Corriente resistencias de banda" unit="A" active />
+                <SensorCard type="NTC-10K" label="Temperatura barril" unit="°C" active />
                 <SensorCard type="+ Agregar" label="Más sensores próximamente" unit="" active={false} />
               </div>
             </div>

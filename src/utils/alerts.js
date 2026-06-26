@@ -5,6 +5,14 @@ export const ALERT_THRESHOLDS = {
     unit: 'A',
     label: 'Corriente SCT-013',
   },
+  temperature: {
+    low_warning: 100.0,
+    low_critical: 80.0,
+    high_warning: 240.0,
+    high_critical: 260.0,
+    unit: '°C',
+    label: 'Temperatura NTC-10K',
+  },
 };
 
 export function analyzeCurrentReading(amps) {
@@ -40,6 +48,52 @@ export function analyzeCurrentReading(amps) {
     color: '#0f6e56',
     bg: '#e1f5ee',
     message: `✅ Corriente normal: ${amps.toFixed(1)}A`,
+    maintenance: null,
+  };
+}
+
+export function analyzeTemperatureReading(tempC) {
+  if (tempC >= ALERT_THRESHOLDS.temperature.high_critical) {
+    return {
+      level: 'critical',
+      color: '#e24b4a',
+      bg: '#fcebeb',
+      message: `🔥 ALERTA CRÍTICA: Temperatura ${tempC.toFixed(1)}°C supera límite máximo. Detener máquina.`,
+      maintenance: 'Verificar resistencias de banda y termostato. Riesgo de daño al equipo.',
+    };
+  }
+  if (tempC >= ALERT_THRESHOLDS.temperature.high_warning) {
+    return {
+      level: 'warning',
+      color: '#ba7517',
+      bg: '#faeeda',
+      message: `⚠️ ADVERTENCIA: Temperatura ${tempC.toFixed(1)}°C elevada. Monitorear de cerca.`,
+      maintenance: 'Revisar configuración de PID y flujo de aire de enfriamiento.',
+    };
+  }
+  if (tempC <= ALERT_THRESHOLDS.temperature.low_critical) {
+    return {
+      level: 'critical',
+      color: '#e24b4a',
+      bg: '#fcebeb',
+      message: `❄️ ALERTA CRÍTICA: Temperatura ${tempC.toFixed(1)}°C muy baja. Verificar calentador.`,
+      maintenance: 'Verificar conexiones del calentador y termistor. Posible fallo en calefacción.',
+    };
+  }
+  if (tempC <= ALERT_THRESHOLDS.temperature.low_warning) {
+    return {
+      level: 'warning',
+      color: '#ba7517',
+      bg: '#faeeda',
+      message: `⚠️ ADVERTENCIA: Temperatura ${tempC.toFixed(1)}°C baja. Calentando...`,
+      maintenance: 'Esperar a que la temperatura alcance el rango operativo.',
+    };
+  }
+  return {
+    level: 'normal',
+    color: '#0f6e56',
+    bg: '#e1f5ee',
+    message: `✅ Temperatura normal: ${tempC.toFixed(1)}°C`,
     maintenance: null,
   };
 }
