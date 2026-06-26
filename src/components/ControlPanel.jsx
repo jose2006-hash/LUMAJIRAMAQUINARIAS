@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ref, set, push, onValue } from 'firebase/database';
+import { ref, push, onValue } from 'firebase/database';
 import { rtdb } from '../firebase/config';
 
 export default function ControlPanel({ machineId }) {
